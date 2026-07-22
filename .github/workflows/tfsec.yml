@@ -26,7 +26,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Terraform security scan Advanced
-        uses: triat/terraform-security-scan@v3.1.0
+        uses: triat/terraform-security-scan@v3.2.0
         if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}
