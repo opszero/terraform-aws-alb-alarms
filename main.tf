@@ -10,8 +10,12 @@ locals {
     : arn if can(regex(":loadbalancer/app/", arn))
   ])
 
-  alb_5xx_targets = length(var.alb_5xx_lb_names) == 0 ? data.aws_lb.cluster_albs : {
-    for k, v in data.aws_lb.cluster_albs : k => v if contains(tolist(var.alb_5xx_lb_names), v.name)
+  alb_targets = length(var.alb_exclude_names) == 0 ? data.aws_lb.cluster_albs : {
+    for k, v in data.aws_lb.cluster_albs : k => v if !contains(tolist(var.alb_exclude_names), v.name)
+  }
+
+  alb_5xx_targets = length(var.alb_5xx_lb_names) == 0 ? local.alb_targets : {
+    for k, v in local.alb_targets : k => v if contains(tolist(var.alb_5xx_lb_names), v.name)
   }
 }
 
@@ -99,7 +103,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_notifier_lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_request_low" {
-  for_each = data.aws_lb.cluster_albs
+  for_each = local.alb_targets
 
   alarm_name          = "alb-request-count-low-${each.value.name}"
   alarm_description   = "LOW: RequestCount > 500/min in 1+ of last 5 minutes"
@@ -122,7 +126,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_low" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_request_medium" {
-  for_each = data.aws_lb.cluster_albs
+  for_each = local.alb_targets
 
   alarm_name          = "alb-request-count-medium-${each.value.name}"
   alarm_description   = "MEDIUM: RequestCount > 500/min in 3+ of last 5 minutes"
@@ -145,7 +149,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_medium" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_request_critical" {
-  for_each = data.aws_lb.cluster_albs
+  for_each = local.alb_targets
 
   alarm_name          = "alb-request-count-critical-${each.value.name}"
   alarm_description   = "CRITICAL: RequestCount > 500/min in all 5 of last 5 minutes"
@@ -168,7 +172,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_critical" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_latency" {
-  for_each = data.aws_lb.cluster_albs
+  for_each = local.alb_targets
 
   alarm_name          = "alb-latency-${each.value.name}"
   alarm_description   = "ALB target response time exceeded 1s average for 10 minutes"

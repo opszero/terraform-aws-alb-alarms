@@ -19,3 +19,9 @@ variable "alb_5xx_lb_names" {
   description = "ALB names to scope 5xx alarms to. Empty set = all ALBs in the cluster."
   default     = []
 }
+
+variable "alb_exclude_names" {
+  type        = set(string)
+  description = "ALB names to exclude from all alarms (latency, request count, 5xx). Useful for test/temporary ALBs."
+  default     = []
+}
