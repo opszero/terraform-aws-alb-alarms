@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 module "alb_alarms" {
-  source = "github.com/opszero/terraform-aws-alb-alarms"
+  source = "./.."
 
   environment_name  = "my-eks-cluster-prod"
   ENV               = "prod"
