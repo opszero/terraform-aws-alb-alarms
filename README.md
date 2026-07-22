@@ -34,12 +34,6 @@ module "alb-alerts" {
 }
 ```
 
-### Pin to a specific git ref
-
-```hcl
-source = "github.com/opszero/terraform-aws-alb-alarms?ref=v1.0.0"
-```
-
 ## Inputs
 
 | Name | Description | Type | Default | Required |
