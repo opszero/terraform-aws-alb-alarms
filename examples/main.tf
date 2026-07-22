@@ -15,7 +15,3 @@ module "alb_alarms" {
     "api-prod-example-com",
   ]
 }
-
-output "sns_topic_arn" {
-  value = module.alb_alarms.sns_topic_arn
-}

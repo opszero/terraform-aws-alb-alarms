@@ -25,11 +25,11 @@ data "aws_lb" "cluster_albs" {
 }
 
 resource "aws_sns_topic" "alb_request_slack_alerts" {
-  name = "alb-request-count-slack-alerts"
+  name = var.sns_topic_name
 }
 
 resource "aws_iam_role" "alb_alert_lambda_role" {
-  name = "alb-request-alert-lambda-role"
+  name = var.iam_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -53,7 +53,7 @@ data "archive_file" "alb_lambda_zip" {
 }
 
 resource "aws_lambda_function" "alb_request_notifier" {
-  function_name    = "alb-request-count-slack-notifier"
+  function_name    = var.lambda_function_name
   role             = aws_iam_role.alb_alert_lambda_role.arn
   handler          = "alb_notifier.lambda_handler"
   runtime          = "python3.9"
@@ -65,6 +65,10 @@ resource "aws_lambda_function" "alb_request_notifier" {
       SLACK_WEBHOOK_URL = var.slack_webhook_url
       ENV               = var.ENV
     }
+  }
+
+  lifecycle {
+    ignore_changes = [filename]
   }
 }
 
@@ -106,7 +110,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_low" {
   for_each = local.alb_targets
 
   alarm_name          = "alb-request-count-low-${each.value.name}"
-  alarm_description   = "LOW: RequestCount > 500/min in 1+ of last 5 minutes"
+  alarm_description   = "LOW: RequestCount > ${var.request_count_threshold}/min in 1+ of last 5 minutes"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 5
   datapoints_to_alarm = 1
@@ -114,7 +118,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_low" {
   namespace           = "AWS/ApplicationELB"
   period              = 60
   statistic           = "Sum"
-  threshold           = 500
+  threshold           = var.request_count_threshold
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -129,7 +133,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_medium" {
   for_each = local.alb_targets
 
   alarm_name          = "alb-request-count-medium-${each.value.name}"
-  alarm_description   = "MEDIUM: RequestCount > 500/min in 3+ of last 5 minutes"
+  alarm_description   = "MEDIUM: RequestCount > ${var.request_count_threshold}/min in 3+ of last 5 minutes"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 5
   datapoints_to_alarm = 3
@@ -137,7 +141,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_medium" {
   namespace           = "AWS/ApplicationELB"
   period              = 60
   statistic           = "Sum"
-  threshold           = 500
+  threshold           = var.request_count_threshold
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -152,7 +156,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_critical" {
   for_each = local.alb_targets
 
   alarm_name          = "alb-request-count-critical-${each.value.name}"
-  alarm_description   = "CRITICAL: RequestCount > 500/min in all 5 of last 5 minutes"
+  alarm_description   = "CRITICAL: RequestCount > ${var.request_count_threshold}/min in all 5 of last 5 minutes"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 5
   datapoints_to_alarm = 5
@@ -160,7 +164,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_request_critical" {
   namespace           = "AWS/ApplicationELB"
   period              = 60
   statistic           = "Sum"
-  threshold           = 500
+  threshold           = var.request_count_threshold
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -175,7 +179,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_latency" {
   for_each = local.alb_targets
 
   alarm_name          = "alb-latency-${each.value.name}"
-  alarm_description   = "ALB target response time exceeded 1s average for 10 minutes"
+  alarm_description   = "ALB target response time exceeded ${var.latency_threshold_seconds}s average for 10 minutes"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   datapoints_to_alarm = 2
@@ -183,7 +187,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_latency" {
   namespace           = "AWS/ApplicationELB"
   period              = 300
   statistic           = "Average"
-  threshold           = 1
+  threshold           = var.latency_threshold_seconds
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -198,14 +202,14 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_low" {
   for_each = local.alb_5xx_targets
 
   alarm_name          = "alb-5xx-low-${each.value.name}"
-  alarm_description   = "[${var.ENV}] [LOW] ${each.value.name} — 1–10 HTTP 5xx errors in 5 min."
+  alarm_description   = "[${var.ENV}] [LOW] ${each.value.name} — 1–${var.alb_5xx_low_threshold} HTTP 5xx errors in 5 min."
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "HTTPCode_Target_5XX_Count"
   namespace           = "AWS/ApplicationELB"
   period              = 300
   statistic           = "Sum"
-  threshold           = 10
+  threshold           = var.alb_5xx_low_threshold
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -220,14 +224,14 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_medium" {
   for_each = local.alb_5xx_targets
 
   alarm_name          = "alb-5xx-medium-${each.value.name}"
-  alarm_description   = "[${var.ENV}] [MEDIUM] ${each.value.name} — 10–20 HTTP 5xx errors in 5 min."
+  alarm_description   = "[${var.ENV}] [MEDIUM] ${each.value.name} — ${var.alb_5xx_low_threshold}–${var.alb_5xx_medium_threshold} HTTP 5xx errors in 5 min."
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "HTTPCode_Target_5XX_Count"
   namespace           = "AWS/ApplicationELB"
   period              = 300
   statistic           = "Sum"
-  threshold           = 20
+  threshold           = var.alb_5xx_medium_threshold
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -242,14 +246,14 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_high" {
   for_each = local.alb_5xx_targets
 
   alarm_name          = "alb-5xx-high-${each.value.name}"
-  alarm_description   = "[${var.ENV}] [HIGH] ${each.value.name} — 20+ HTTP 5xx errors in 5 min. Immediate action required."
+  alarm_description   = "[${var.ENV}] [HIGH] ${each.value.name} — ${var.alb_5xx_medium_threshold}+ HTTP 5xx errors in 5 min. Immediate action required."
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "HTTPCode_Target_5XX_Count"
   namespace           = "AWS/ApplicationELB"
   period              = 300
   statistic           = "Sum"
-  threshold           = 30
+  threshold           = var.alb_5xx_high_threshold
   treat_missing_data  = "notBreaching"
 
   dimensions = {
